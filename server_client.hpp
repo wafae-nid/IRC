@@ -4,9 +4,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/select.h>
 #include <iostream>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 struct Client
 {
