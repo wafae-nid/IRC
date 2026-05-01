@@ -1,6 +1,15 @@
 #include "server_client.hpp"
 
 
+void recompute_max_fd(std::vector<Client> &clients, int server_fd, int *max_fd)
+{
+    *max_fd = server_fd;
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        if (clients[i].fd > *max_fd)
+            *max_fd = clients[i].fd;
+    }
+}
 
 void check_buffer(Client *client)
 {
@@ -14,9 +23,8 @@ void check_buffer(Client *client)
     }
 }
 
-void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original_set)
+void handle_client(int client_fd, int server_fd,std::vector<Client> *clients, fd_set *original_set, int *max_fd)
 {
-    Client client_;
 
     char buff[1024];
     size_t bytes = 0;
@@ -34,6 +42,7 @@ void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original
             }
         }
         FD_CLR(client_fd, original_set);
+        recompute_max_fd(*clients, server_fd, max_fd);
         close(client_fd); 
         return;
     }
@@ -45,13 +54,10 @@ void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original
             (*clients)[i].buffer.append(buff, bytes); 
              check_buffer(&(*clients)[i]);// update existing
             // std::cout << (*clients)[i].buffer << "\n";
-            return;
+            break;
         }
     }
-    client_.fd = client_fd;;
-    client_.buffer.append(buff, bytes);
-    check_buffer(&client_);
-    clients->push_back(client_);
+   
 }
 
 int server_setup(void)
@@ -93,13 +99,17 @@ void server_core(int server_fd ,std::vector<Client> *clients)
     FD_SET(server_fd, &original_set);
     int max_fd = server_fd;
 
-  
+    Client client_;
     int client_fd;
 
     while(1)
     {
         fd_reads = original_set;
-        select(max_fd + 1, &fd_reads, NULL, NULL, NULL);
+        if(select(max_fd + 1, &fd_reads, NULL, NULL, NULL) < 0)
+        {
+            std::cout << "select failed \n";
+            break;
+        }
         for(int fd = 0;fd <= max_fd; fd++)
         {
             if(FD_ISSET(fd,&fd_reads) == 0)
@@ -113,13 +123,15 @@ void server_core(int server_fd ,std::vector<Client> *clients)
                     continue;
                 }
                 FD_SET(client_fd,&original_set);
-                if(client_fd > max_fd) // if a client fd is closed the kernel will cycle its fd thats why this check is important
-                    max_fd = client_fd;
+                client_.fd = client_fd;
+                clients->push_back(client_);
+                recompute_max_fd(*clients, server_fd, &max_fd);
+
                 std::cout << "handle serveer with accept\n";
             }
             else
             {
-                handle_client(fd, clients, &original_set);
+                handle_client(fd,server_fd,clients, &original_set,&max_fd);
             }
         }
     }
