@@ -11,6 +11,14 @@ void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original
     bytes = recv(client_fd,buff,sizeof(buff) - 1,0);
     if(bytes <= 0)
     {
+        for (size_t i = 0; i < clients->size(); i++)
+        {
+            if ((*clients)[i].fd == client_fd)
+            {
+                clients->erase(clients->begin() + i);
+                break;
+            }
+        }
         FD_CLR(client_fd, original_set);
         close(client_fd); 
         return;
@@ -20,7 +28,7 @@ void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original
     {
         if((*clients)[i].fd == client_fd)
         {
-            (*clients)[i].buffer = buff;  // update existing
+            (*clients)[i].buffer.append(buff, bytes);  // update existing
             std::cout << (*clients)[i].buffer << "\n";
             return;
         }
@@ -28,7 +36,7 @@ void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original
     client_.fd = client_fd;;
     client_.buffer = buff;
     clients->push_back(client_);
-    std::cout<< client_.buffer << "\n";
+   // std::cout<< client_.buffer << "\n";
 }
 
 int server_setup(void)
@@ -84,6 +92,11 @@ void server_core(int server_fd ,std::vector<Client> *clients)
             if(fd == server_fd)
             {
                 client_fd = accept(fd,(struct sockaddr *)&client_addr,&len);
+                if(client_fd <0)
+                {
+                    std::cout<<"accept failed\n";
+                    continue;
+                }
                 FD_SET(client_fd,&original_set);
                 if(client_fd > max_fd) // if a client fd is closed the kernel will cycle its fd thats why this check is important
                     max_fd = client_fd;
@@ -91,7 +104,7 @@ void server_core(int server_fd ,std::vector<Client> *clients)
             }
             else
             {
-                 handle_client(fd, clients, &original_set);
+                handle_client(fd, clients, &original_set);
             }
         }
     }

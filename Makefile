@@ -11,7 +11,7 @@ NAME_1 = client
 NAME_2 = server
 
 CLIENTOBJS = $(CLIENTSRS:.cpp=.o)
-SERVEROBJS = $(SERVERSRS:.c=.o)
+SERVEROBJS = $(SERVERSRS:.cpp=.o)
 
 all: $(NAME_1) $(NAME_2)
 
