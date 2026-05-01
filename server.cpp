@@ -1,5 +1,19 @@
 #include "server_client.hpp"
 
+
+
+void check_buffer(Client *client)
+{
+    size_t pos;
+    std::string command;
+    while ((pos = client->buffer.find("\r\n")) != std::string::npos)
+    {
+        command = client->buffer.substr(0, pos);
+        client->buffer.erase(0, pos + 2);
+        std::cout << "[" << command << "]\n";
+    }
+}
+
 void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original_set)
 {
     Client client_;
@@ -28,15 +42,16 @@ void handle_client(int client_fd, std::vector<Client> *clients, fd_set *original
     {
         if((*clients)[i].fd == client_fd)
         {
-            (*clients)[i].buffer.append(buff, bytes);  // update existing
-            std::cout << (*clients)[i].buffer << "\n";
+            (*clients)[i].buffer.append(buff, bytes); 
+             check_buffer(&(*clients)[i]);// update existing
+            // std::cout << (*clients)[i].buffer << "\n";
             return;
         }
     }
     client_.fd = client_fd;;
-    client_.buffer = buff;
+    client_.buffer.append(buff, bytes);
+    check_buffer(&client_);
     clients->push_back(client_);
-   // std::cout<< client_.buffer << "\n";
 }
 
 int server_setup(void)
