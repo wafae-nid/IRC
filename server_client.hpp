@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 #include <unistd.h>
+#include <signal.h>
+
+
 
 struct Client
 {

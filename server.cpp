@@ -1,104 +1,160 @@
-#include "server_client.hpp"
+#include "Server.hpp"
 
-static const std::string SERVER_PASSWORD = "1234";
+const std::string Server::SERVER_PASSWORD = "1234";
+int  g_running = 1;
 
-void send_to_client(int fd, std::string msg)
+Server::Server()
+{
+   
+    server_fd = -1;
+    max_fd = -1;
+    signal(SIGINT,  Server::signal_handler);
+    FD_ZERO(&original_set);
+
+}
+
+Server::~Server()
+{
+    if (server_fd != -1)
+        close(server_fd);
+}
+
+void Server::signal_handler(int sig)
+{
+    (void)sig;
+    g_running = 0;
+}
+
+bool Server::send_to_client(int fd, std::string msg)
 {
     msg += "\r\n";
-    send(fd, msg.c_str(), msg.size(), 0);
+    if(send(fd, msg.c_str(), msg.size(), 0) == -1)
+    {
+         return false;
+    }
+    return true;
 }
 
-void recompute_max_fd(std::vector<Client> &clients, int server_fd, int *max_fd)
+
+
+void Server::recompute_max_fd()
 {
-    *max_fd = server_fd;
+    max_fd = server_fd;
     for (size_t i = 0; i < clients.size(); i++)
     {
-        if (clients[i].fd > *max_fd)
-            *max_fd = clients[i].fd;
-    }
-}
-void try_register(Client *client)
-{
-    if (client->pass_ok && client->nick_set && client->user_set)
-    {
-        if (!client->registered)
-        {
-            client->registered = true;
-            send_to_client(client->fd, "001 " + client->nickname + " :Welcome to the IRC server");
-        }
+        if (clients[i].fd > max_fd)
+            max_fd = clients[i].fd;
     }
 }
 
-void nick_command(Client *client, std::string command)
+/* ---------------- CLIENT CLEANUP ---------------- */
+
+void Server::remove_client(int fd)
 {
-    std::string nick = command.substr(4); 
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        if (clients[i].fd == fd)
+        {
+            clients.erase(clients.begin() + i);
+            break;
+        }
+    }
+    FD_CLR(fd, &original_set);
+    close(fd);
+    recompute_max_fd();
+}
+
+/*--------------- REGISTER ---------------- */
+
+void Server::try_register(Client *client)
+{
+    if (client->pass_ok && client->nick_set && client->user_set && !client->registered)
+    {
+        client->registered = true;
+        if(send_to_client(client->fd,"001 " + client->nickname + " :Welcome to the IRC server") == 0)
+            remove_client(client->fd);
+    }
+}
+
+/* ---------------- COMMANDS (logic ) ---------------- */
+
+
+void Server::nick_command(Client *client, std::string command)
+{
+    std::string nick = command.substr(4);
     size_t index = nick.find_first_not_of(' ');
     if (index == std::string::npos)
     {
-        send_to_client(client->fd, "461 PASS :Not enough parameters");
+       if(send_to_client(client->fd, "461 PASS :Not enough parameters") == 0)
+            remove_client(client->fd);
         return;
     }
     client->nickname = nick.substr(index);
-    std::cout << client-> nickname <<"\n";
     client->nick_set = true;
     try_register(client);
 }
 
-void pass_command(Client *client, std::string command)
+void Server::pass_command(Client *client, std::string command)
 {
-    std::string password = command.substr(4); 
-    size_t index = password.find_first_not_of(' ');
+    std::string pass = command.substr(4);
+    size_t index = pass.find_first_not_of(' ');
     if (index == std::string::npos)
     {
-        send_to_client(client->fd, "461 PASS :Not enough parameters");
+        if(send_to_client(client->fd, "461 PASS :Not enough parameters") == 0)
+            remove_client(client->fd);
         return;
     }
-     if (password.substr(index) == SERVER_PASSWORD)
-         client->pass_ok = true;
+    if (pass.substr(index) == SERVER_PASSWORD)
+        client->pass_ok = true;
     else
-        send_to_client(client->fd, "464 :Password incorrect");
+    {  
+        if(send_to_client(client->fd, "464 PASS :Wrong password") == 0)
+            remove_client(client->fd);
+    }
+
 }
 
-void user_command(Client *client, std::string command)
+void Server::user_command(Client *client, std::string command)
 {
-    std::string user = command.substr(4); 
+    std::string user = command.substr(4);
     size_t index = user.find_first_not_of(' ');
     if (index == std::string::npos)
     {
-        send_to_client(client->fd, "461 PASS :Not enough parameters");
+        if(send_to_client(client->fd, "461 PASS :Not enough parameters") == 0)
+            remove_client(client->fd);
         return;
     }
     client->username = user.substr(index);
-    std::cout << client->username <<"\n";
     client->user_set = true;
     try_register(client);
 }
 
-void handle_command(Client *client, std::string command)
-{
- 
+/* ---------------- COMMAND HANDLER ---------------- */
 
+void Server::handle_command(Client *client, std::string command)
+{
     if (!client->pass_ok)
     {
-        if(command.rfind("PASS",0)== 0)
-        
+        if (command.rfind("PASS", 0) == 0)
             pass_command(client, command);
-        else 
-            return;
+        return;
     }
+
+    if (command.rfind("PASS", 0) == 0)
+        return;
+    else if (command.rfind("NICK", 0) == 0)
+        nick_command(client, command);
+    else if (command.rfind("USER", 0) == 0)
+        user_command(client, command);
     else
-    {
-        if(command.rfind("PASS",0) == 0)
-            return;
-        else if(command.rfind("NICK",0) == 0)
-            nick_command(client, command);
-        else if(command.rfind("USER",0) == 0)
-           user_command(client, command);
-        else    
-            send_to_client(client->fd, "Command not found");
-    }
+        send_to_client(client->fd, "Command not found");
 }
-void check_buffer(Client *client)
+
+
+/* ---------------- BUFFER ---------------- */
+
+
+void Server::check_buffer(Client *client)
 {
     size_t pos;
     std::string command;
@@ -111,137 +167,136 @@ void check_buffer(Client *client)
     }
 }
 
-void handle_client(int client_fd, int server_fd,std::vector<Client> *clients, fd_set *original_set, int *max_fd)
+/* ---------------- CLIENT HANDLING ---------------- */
+
+void Server::handle_client(int client_fd)
 {
-
     char buff[1024];
-    ssize_t bytes = 0;
+    ssize_t bytes = recv(client_fd, buff, sizeof(buff) - 1, 0);
 
-    
-    bytes = recv(client_fd,buff,sizeof(buff) - 1,0);
-    if(bytes <= 0)
+    if (bytes <= 0)
     {
-        for (size_t i = 0; i < clients->size(); i++)
-        {
-            if ((*clients)[i].fd == client_fd)
-            {
-                clients->erase(clients->begin() + i);
-                break;
-            }
-        }
-        FD_CLR(client_fd, original_set);
-        recompute_max_fd(*clients, server_fd, max_fd);
-        close(client_fd); 
+        remove_client(client_fd);
         return;
     }
+
     buff[bytes] = '\0';
-    for (size_t i = 0; i < clients->size(); i++) // this loop is so i dont add an already there client to my vector 
+
+    for (size_t i = 0; i < clients.size(); i++)
     {
-        if((*clients)[i].fd == client_fd)
+        if (clients[i].fd == client_fd)
         {
-            (*clients)[i].buffer.append(buff, bytes); 
-             check_buffer(&(*clients)[i]);// update existing
+            clients[i].buffer.append(buff, bytes);
+            check_buffer(&clients[i]);
             break;
         }
     }
-   
 }
 
-
-int server_setup(void)
+void Server::server_setup()
 {
     struct sockaddr_in addr;
 
-    std::cout << "im in server\n";
-    int server_fd = socket(AF_INET,SOCK_STREAM,0);
-
-    if(server_fd == -1)
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1)
     {
         std::cout << "socket failed \n";
-        return(-1);
+        return;
     }
+
     int opt = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+    if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
-         perror("setsockopt");
-        return -1;
-    }   
+        std::cout << "setsockopt failed \n";
+        return;
+    }
+
     addr.sin_family = AF_INET;
     addr.sin_port = htons(6667);
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    if(bind(server_fd,(struct sockaddr *)&addr,sizeof(addr)) == -1) // struct sockaddr for any type of addr nor just ipv4
+
+    if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
         std::cout << "binding failed \n";
-        return(-1);
+        return;
     }
-    if(listen(server_fd,10) == -1) // this doesnt mean i can have only 2 connections but my waiting queue is of size 2 and i do accept once so the third connection goes to the queue too  ps::this is accept queue and kernel might strech it eve though i did write 2
+
+    if (listen(server_fd, 10) == -1)
     {
         std::cout << "listening failed \n";
-        return(-1);
+        return;
     }
-    std::cout << "server ready \n";
-    return(server_fd);
 
+    FD_SET(server_fd, &original_set);
+    max_fd = server_fd;
+
+    std::cout << "server ready\n";
 }
 
-void server_core(int server_fd ,std::vector<Client> *clients)
+/* ---------------- MAIN LOOP ---------------- */
+
+void Server::server_core()
 {
-    struct sockaddr_in client_addr;
-    socklen_t len = sizeof(client_addr);
+    fd_set readfds;
 
-    fd_set original_set, fd_reads;
-    FD_ZERO(&original_set);
-    FD_SET(server_fd, &original_set);
-    int max_fd = server_fd;
-
-    int client_fd;
-    Client client_;
-
-    while(1)
+    while (g_running)
     {
-        fd_reads = original_set;
-        if(select(max_fd + 1, &fd_reads, NULL, NULL, NULL) < 0)
+        readfds = original_set;
+
+        if (select(max_fd + 1, &readfds, NULL, NULL, NULL) < 0)
         {
             std::cout << "select failed \n";
             break;
         }
-        for(int fd = 0;fd <= max_fd; fd++)
+
+        for (int fd = 0; fd <= max_fd; fd++)
         {
-            if(FD_ISSET(fd,&fd_reads) == 0)
+            if (!FD_ISSET(fd, &readfds))
                 continue;
-            if(fd == server_fd)
+            if (fd == server_fd)
             {
-                client_fd = accept(fd,(struct sockaddr *)&client_addr,&len);
-                if(client_fd <0)
+                struct sockaddr_in addr;
+                socklen_t len = sizeof(addr);
+
+                int client_fd = accept(fd, (struct sockaddr *)&addr, &len);
+                if (client_fd < 0)
                 {
                     std::cout<<"accept failed\n";
                     continue;
                 }
-                FD_SET(client_fd,&original_set);
-                client_.fd = client_fd;
-                client_.pass_ok = false;
-                client_.registered = false;
-                client_.nick_set = false;
-                client_.user_set = false;
-                clients->push_back(client_);
-                recompute_max_fd(*clients, server_fd, &max_fd);
-                std::cout << "handle serveer with accept\n";
+
+                FD_SET(client_fd, &original_set);
+
+                Client c;
+                c.fd = client_fd;
+                c.pass_ok = false;
+                c.nick_set = false;
+                c.user_set = false;
+                c.registered = false;
+
+                clients.push_back(c);
+
+                recompute_max_fd();
             }
             else
-            {
-                handle_client(fd,server_fd,clients, &original_set,&max_fd);
-            }
+                handle_client(fd);
         }
     }
+}
+
+/* ---------------- RUN ---------------- */
+
+void Server::run()
+{
+    server_setup();
+    server_core();
 }
 
 int main()
 {
 
-    std::vector<Client> clients;
+   signal(SIGPIPE, SIG_IGN);
+   Server server;
+   server.run(); 
 
-    int server_fd = server_setup();
-    server_core(server_fd ,&clients);
-    
-
-};
+}

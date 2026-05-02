@@ -5,7 +5,7 @@ CLIENTSRS = client.cpp
 SERVERSRS = server.cpp
 
 
-HEADERS = server_client.hpp 
+HEADERS = server_client.hpp Server.hpp 
 
 NAME_1 = client
 NAME_2 = server
