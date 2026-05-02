@@ -1,6 +1,13 @@
 #include "server_client.hpp"
 
 static const std::string SERVER_PASSWORD = "1234";
+
+void send_to_client(int fd, std::string msg)
+{
+    msg += "\r\n";
+    send(fd, msg.c_str(), msg.size(), 0);
+}
+
 void recompute_max_fd(std::vector<Client> &clients, int server_fd, int *max_fd)
 {
     *max_fd = server_fd;
@@ -17,61 +24,65 @@ void try_register(Client *client)
         if (!client->registered)
         {
             client->registered = true;
-            std::cout << "Client registered!\n";
+            send_to_client(client->fd, "001 " + client->nickname + " :Welcome to the IRC server");
         }
     }
 }
 
-void nick_command(Client *client, std::string nick)
+void nick_command(Client *client, std::string command)
 {
-    if (nick.empty())
+    std::string nick = command.substr(4); 
+    size_t index = nick.find_first_not_of(' ');
+    if (index == std::string::npos)
     {
-        std::cout << "ERR: No nickname given\n";
+        send_to_client(client->fd, "461 PASS :Not enough parameters");
         return;
     }
-    client->nickname = nick;
+    client->nickname = nick.substr(index);
     std::cout << client-> nickname <<"\n";
     client->nick_set = true;
+    try_register(client);
 }
-void pass_command(Client *client, std::string password)
+
+void pass_command(Client *client, std::string command)
 {
-  if (password == SERVER_PASSWORD)
-  {
-    std::cout << "good password\n";
-    client->pass_ok = true;
-  }
-  else
-    std::cout << "Wrong password\n";
-}
-void user_command(Client *client, std::string user)
-{
-    if (user.empty())
+    std::string password = command.substr(4); 
+    size_t index = password.find_first_not_of(' ');
+    if (index == std::string::npos)
     {
-        std::cout << "ERR: No Username given\n";
+        send_to_client(client->fd, "461 PASS :Not enough parameters");
         return;
     }
-    client->username = user;
+     if (password.substr(index) == SERVER_PASSWORD)
+         client->pass_ok = true;
+    else
+        send_to_client(client->fd, "464 :Password incorrect");
+}
+
+void user_command(Client *client, std::string command)
+{
+    std::string user = command.substr(4); 
+    size_t index = user.find_first_not_of(' ');
+    if (index == std::string::npos)
+    {
+        send_to_client(client->fd, "461 PASS :Not enough parameters");
+        return;
+    }
+    client->username = user.substr(index);
     std::cout << client->username <<"\n";
     client->user_set = true;
+    try_register(client);
 }
+
 void handle_command(Client *client, std::string command)
 {
-    std::string password;
-    size_t index = 0;
+ 
 
     if (!client->pass_ok)
     {
         if(command.rfind("PASS",0)== 0)
-        {
-            password = command.substr(4); 
-            index = password.find_first_not_of(' ');
-            if (index == std::string::npos)
-            {
-                std::cout<< "enter password\n";
-                    return;
-            } // or error
-            pass_command(client, password.substr(index));
-        }
+        
+            pass_command(client, command);
         else 
             return;
     }
@@ -80,24 +91,11 @@ void handle_command(Client *client, std::string command)
         if(command.rfind("PASS",0) == 0)
             return;
         else if(command.rfind("NICK",0) == 0)
-        {
-            password = command.substr(4); 
-            index = password.find_first_not_of(' ');
-            if (index == std::string::npos)
-                    return; // or error
-            nick_command(client, password.substr(index));
-        }
+            nick_command(client, command);
         else if(command.rfind("USER",0) == 0)
-        {   
-            password = command.substr(4); 
-            index = password.find_first_not_of(' ');
-            if (index == std::string::npos)
-                    return; // or error
-            user_command(client, password.substr(index));
-
-        }
-       else    
-            std::cout <<"command not found\n";
+           user_command(client, command);
+        else    
+            send_to_client(client->fd, "Command not found");
     }
 }
 void check_buffer(Client *client)
@@ -143,7 +141,6 @@ void handle_client(int client_fd, int server_fd,std::vector<Client> *clients, fd
         {
             (*clients)[i].buffer.append(buff, bytes); 
              check_buffer(&(*clients)[i]);// update existing
-            // std::cout << (*clients)[i].buffer << "\n";
             break;
         }
     }
