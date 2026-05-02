@@ -14,6 +14,14 @@ struct Client
 {
     int fd;
     std::string buffer;
+
+    bool pass_ok;
+    bool nick_set;
+    bool user_set;
+    bool registered;
+
+    std::string nickname;
+    std::string username;
 };
 
 
