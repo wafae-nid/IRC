@@ -160,11 +160,19 @@ void Server::user_command(Client *client, std::string command)
 {
     std::string user = command.substr(4);
     size_t index = user.find_first_not_of(' ');
+
     if (index == std::string::npos)
     {
         reply(client, "461", "USER", "Not enough parameters");
         return;
     }
+
+    if (client->registered)
+    {
+        reply(client, "462", "USER", "You may not reregister"); // user can be set only once and only if not registered before unlike nickname
+        return;
+    }
+
     client->username = user.substr(index);
     client->user_set = true;
     try_register(client);
