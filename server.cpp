@@ -30,19 +30,23 @@ void Server::signal_handler(int sig)
 
 void Server::reply(Client *client, const std::string &code, const std::string &command, const std::string &message)
 {
-   
     std::string msg = ":" + SERVER_NAME + " " + code;
 
-    if (!client->nickname.empty())
-        msg += " " + client->nickname;
+    std::string target;
+
+    if (client->registered && !client->nickname.empty())
+        target = client->nickname;
     else
-        msg += " *";
+        target = "*";
+
+    msg += " " + target;
 
     if (!command.empty())
         msg += " " + command;
+
     msg += " :" + message;
 
-    if(send_to_client(client->fd, msg) == 0)
+    if (!send_to_client(client->fd, msg))
         remove_client(client->fd);
 }
 
@@ -112,105 +116,136 @@ bool Server::nickname_exists(const std::string &nick)
     return false;
 }
 
-void Server::nick_command(Client *client, std::string command)
+void Server::nick_command(Client *client, std::string param)
 {
-    std::string nickname_;  
-    std::string rest = command.substr(4);
-    size_t index = rest.find_first_not_of(' ');
 
-    if (index == std::string::npos)
+    if (param.empty())
     {
         reply(client, "461", "NICK", "Not enough parameters");
         return;
     }
-    nickname_ = rest.substr(index);
-    if(nickname_exists(nickname_))
+    if(nickname_exists(param))
     {
-        reply(client, "433", "NICK", nickname_ + " :Nickname is already in use");
+        reply(client, "433", "NICK", param + " :Nickname is already in use");
         return;
     }
     else if(client->registered)
     {
         std::string old_nick = client->nickname;
-        std::string msg = ":" + old_nick + " NICK :" + nickname_;
+        std::string msg = ":" + old_nick + " NICK :" + param;
         send_to_client(client->fd, msg);
     }
-    client->nickname = nickname_;
+    client->nickname = param;
     client->nick_set = true;
     try_register(client);
 }
 
-void Server::pass_command(Client *client, std::string command)
+void Server::pass_command(Client *client, std::string param)
 {
-    std::string pass = command.substr(4);
-    size_t index = pass.find_first_not_of(' ');
-    if (index == std::string::npos)
+    if (client->pass_ok)
+    {
+        reply(client, "462", "PASS", "You may not reregister");
+        return;
+    }
+
+    if (param.empty())
     {
         reply(client, "461", "PASS", "Not enough parameters");
         return;
     }
-    if (pass.substr(index) == SERVER_PASSWORD)
-        client->pass_ok = true;
-    else
-        reply(client, "464","PASS", "Wrong password");
 
-}
-
-void Server::user_command(Client *client, std::string command)
-{
-    std::string user = command.substr(4);
-    size_t index = user.find_first_not_of(' ');
-
-    if (index == std::string::npos)
+    if (param != SERVER_PASSWORD)
     {
-        reply(client, "461", "USER", "Not enough parameters");
+        reply(client, "464", "PASS", "Wrong password");
         return;
     }
+    client->pass_ok = true;
+}
 
-    if (client->registered)
+void Server::user_command(Client *client, std::string param)
+{
+    if (client->user_set)
     {
         reply(client, "462", "USER", "You may not reregister"); // user can be set only once and only if not registered before unlike nickname
         return;
     }
 
-    client->username = user.substr(index);
+    if (param.empty())
+    {
+        reply(client, "461", "USER", "Not enough parameters");
+        return;
+    }
+    client->username = param;
     client->user_set = true;
     try_register(client);
 }
 
 /* ---------------- COMMAND HANDLER ---------------- */
 
-void Server::handle_command(Client *client, std::string command)
+void Server::handle_command(Client *client,Command command)
 {
+
+    if (command.cmd.empty())
+        return;
+
     if (!client->pass_ok)
     {
-        if (command.rfind("PASS", 0) == 0)
-            pass_command(client, command);
+        if (command.cmd == "PASS")
+            pass_command(client, command.param);
         return;
     }
-
-    if (command.rfind("PASS", 0) == 0)
+    if (command.cmd == "PASS")
         return;
-    else if (command.rfind("NICK", 0) == 0)
-        nick_command(client, command);
-    else if (command.rfind("USER", 0) == 0)
-        user_command(client, command);
+    else if (command.cmd == "NICK")
+        nick_command(client, command.param);
+    else if (command.cmd == "USER")
+        user_command(client, command.param);
     else
-        send_to_client(client->fd, "Command not found");
+        reply(client, "421", command.cmd, "Unknown command");
 }
 
 
 /* ---------------- BUFFER ---------------- */
 
+Command Server::parse_command(std::string command_)
+{
+    Command command;
+    std::string rest;
+    std::string param;
+    
+
+    size_t index = command_.find_first_not_of(" \t");
+
+    if(index == std::string::npos)
+        return(command);
+
+    rest = command_.substr(index); // the first not space char pos
+
+    size_t space_pos = rest.find(' ');
+    if(space_pos == std::string::npos)
+    {
+        command.cmd = rest;
+        return(command);
+    }
+    command.cmd = rest.substr(0, space_pos);
+
+    index = rest.find_first_not_of(" \t", space_pos);// fisrt non space char from that last space 
+    if(index != std::string::npos) // if there is a parameter assign it 
+        command.param = rest.substr(index);
+    return(command);
+
+}
 
 void Server::check_buffer(Client *client)
 {
     size_t pos;
-    std::string command;
+    std::string command_;
+    Command command;
 
     while ((pos = client->buffer.find("\r\n")) != std::string::npos)
     {
-        command = client->buffer.substr(0, pos);
+        command_ = client->buffer.substr(0, pos);
+        command = parse_command(command_);
         handle_command(client, command);
         client->buffer.erase(0, pos + 2);
     }

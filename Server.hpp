@@ -13,6 +13,13 @@
 #include <signal.h>
 #include <sys/select.h>
 
+
+struct Command
+{
+    std::string cmd;
+    std::string param;
+};
+
 class Server
 {
     private:
@@ -47,7 +54,8 @@ class Server
         void pass_command(Client *client, std::string command);
         void user_command(Client *client, std::string command);
 
-        void handle_command(Client *client, std::string command);
+        Command parse_command(std::string command_);
+        void handle_command(Client *client,Command command);
         void check_buffer(Client *client);
 
         void remove_client(int fd);
