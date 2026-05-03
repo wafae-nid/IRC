@@ -1,7 +1,8 @@
 #include "Server.hpp"
 
 const std::string Server::SERVER_PASSWORD = "1234";
-int  g_running = 1;
+
+volatile sig_atomic_t   g_running = 1;
 
 Server::Server()
 {
@@ -9,6 +10,7 @@ Server::Server()
     server_fd = -1;
     max_fd = -1;
     signal(SIGINT,  Server::signal_handler);
+    signal(SIGQUIT, Server::signal_handler);
     FD_ZERO(&original_set);
 
 }
