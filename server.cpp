@@ -1,6 +1,7 @@
 #include "Server.hpp"
 
 const std::string Server::SERVER_PASSWORD = "1234";
+const std::string Server::SERVER_NAME = "IRC";
 
 volatile sig_atomic_t   g_running = 1;
 
@@ -25,6 +26,24 @@ void Server::signal_handler(int sig)
 {
     (void)sig;
     g_running = 0;
+}
+
+void Server::reply(Client *client, const std::string &code, const std::string &command, const std::string &message)
+{
+   
+    std::string msg = ":" + SERVER_NAME + " " + code;
+
+    if (!client->nickname.empty())
+        msg += " " + client->nickname;
+    else
+        msg += " *";
+
+    if (!command.empty())
+        msg += " " + command;
+    msg += " :" + message;
+
+    if(send_to_client(client->fd, msg) == 0)
+        remove_client(client->fd);
 }
 
 bool Server::send_to_client(int fd, std::string msg)
@@ -73,25 +92,50 @@ void Server::try_register(Client *client)
     if (client->pass_ok && client->nick_set && client->user_set && !client->registered)
     {
         client->registered = true;
-        if(send_to_client(client->fd,"001 " + client->nickname + " :Welcome to the IRC server") == 0)
-            remove_client(client->fd);
+        reply(client, "001", "", "Welcome to the IRC network");
+        reply(client, "002", "", "Your host is IRC, running version 1.0");
+        reply(client, "003", "", "This server was created today");
+        reply(client, "004", "", "IRC 1.0");
     }
 }
 
+
 /* ---------------- COMMANDS (logic ) ---------------- */
 
+bool Server::nickname_exists(const std::string &nick)
+{
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        if (clients[i].nickname == nick)
+            return true;
+    }
+    return false;
+}
 
 void Server::nick_command(Client *client, std::string command)
 {
-    std::string nick = command.substr(4);
-    size_t index = nick.find_first_not_of(' ');
+    std::string nickname_;  
+    std::string rest = command.substr(4);
+    size_t index = rest.find_first_not_of(' ');
+
     if (index == std::string::npos)
     {
-       if(send_to_client(client->fd, "461 PASS :Not enough parameters") == 0)
-            remove_client(client->fd);
+        reply(client, "461", "NICK", "Not enough parameters");
         return;
     }
-    client->nickname = nick.substr(index);
+    nickname_ = rest.substr(index);
+    if(nickname_exists(nickname_))
+    {
+        reply(client, "433", "NICK", nickname_ + " :Nickname is already in use");
+        return;
+    }
+    else if(client->registered)
+    {
+        std::string old_nick = client->nickname;
+        std::string msg = ":" + old_nick + " NICK :" + nickname_;
+        send_to_client(client->fd, msg);
+    }
+    client->nickname = nickname_;
     client->nick_set = true;
     try_register(client);
 }
@@ -102,17 +146,13 @@ void Server::pass_command(Client *client, std::string command)
     size_t index = pass.find_first_not_of(' ');
     if (index == std::string::npos)
     {
-        if(send_to_client(client->fd, "461 PASS :Not enough parameters") == 0)
-            remove_client(client->fd);
+        reply(client, "461", "PASS", "Not enough parameters");
         return;
     }
     if (pass.substr(index) == SERVER_PASSWORD)
         client->pass_ok = true;
     else
-    {  
-        if(send_to_client(client->fd, "464 PASS :Wrong password") == 0)
-            remove_client(client->fd);
-    }
+        reply(client, "464","PASS", "Wrong password");
 
 }
 
@@ -122,8 +162,7 @@ void Server::user_command(Client *client, std::string command)
     size_t index = user.find_first_not_of(' ');
     if (index == std::string::npos)
     {
-        if(send_to_client(client->fd, "461 PASS :Not enough parameters") == 0)
-            remove_client(client->fd);
+        reply(client, "461", "USER", "Not enough parameters");
         return;
     }
     client->username = user.substr(index);

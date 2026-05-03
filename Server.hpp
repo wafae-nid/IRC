@@ -23,6 +23,7 @@ class Server
         std::vector<Client> clients;
 
         static const std::string SERVER_PASSWORD;
+        static const std::string SERVER_NAME; 
 
     public:
         Server();
@@ -41,6 +42,7 @@ class Server
 
         void try_register(Client *client);
 
+        bool nickname_exists(const std::string &nick);
         void nick_command(Client *client, std::string command);
         void pass_command(Client *client, std::string command);
         void user_command(Client *client, std::string command);
@@ -50,6 +52,8 @@ class Server
 
         void remove_client(int fd);
         static void signal_handler(int sig); // so i dond need an object to call it i sued static
+        void reply(Client *client, const std::string &code, const std::string &command, const std::string &message);
+
 };
 
 #endif
