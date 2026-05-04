@@ -55,6 +55,7 @@ class Server
         void user_command(Client *client, std::string command);
 
         Command parse_command(std::string command_);
+        void capitalize_command(std::string &command);
         void handle_command(Client *client,Command command);
         void check_buffer(Client *client);
 

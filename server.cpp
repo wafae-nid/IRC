@@ -182,20 +182,37 @@ void Server::user_command(Client *client, std::string param)
 
 /* ---------------- COMMAND HANDLER ---------------- */
 
-void Server::handle_command(Client *client,Command command)
+void Server::capitalize_command(std::string &command)
 {
+    for(size_t i = 0 ; i < command.size(); i++)
+    {
+       command[i] =  std::toupper(static_cast<unsigned char>(command[i]));
+    }
+}
 
+void Server::handle_command(Client *client, Command command)
+{
     if (command.cmd.empty())
         return;
+
+    capitalize_command(command.cmd);// so nick and NICK WORK ;
 
     if (!client->pass_ok)
     {
         if (command.cmd == "PASS")
+        {
             pass_command(client, command.param);
+            return;
+        }
+
+        reply(client, "464", "", "Password required");
         return;
     }
+
     if (command.cmd == "PASS")
-        return;
+    {
+        reply(client, "462", "PASS", "You may not reregister");
+    }
     else if (command.cmd == "NICK")
         nick_command(client, command.param);
     else if (command.cmd == "USER")
