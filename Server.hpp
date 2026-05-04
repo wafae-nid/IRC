@@ -50,6 +50,7 @@ class Server
         void try_register(Client *client);
 
         bool nickname_exists(const std::string &nick);
+        bool Server::is_valid_nick(const std::string &nick);
         void nick_command(Client *client, std::string command);
         void pass_command(Client *client, std::string command);
         void user_command(Client *client, std::string command);

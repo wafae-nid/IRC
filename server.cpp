@@ -116,6 +116,22 @@ bool Server::nickname_exists(const std::string &nick)
     return false;
 }
 
+bool Server::is_valid_nick(const std::string &nick)
+{
+    if (nick.empty())
+        return false;
+
+    if (nick.size() > 15)
+        return false;
+
+    for (size_t i = 0; i < nick.size(); i++)
+    {
+        if (!isalnum(nick[i]) && nick[i] != '_' && nick[i] != '-')
+            return false;
+    }
+    return true;
+}
+
 void Server::nick_command(Client *client, std::string param)
 {
 
@@ -124,7 +140,14 @@ void Server::nick_command(Client *client, std::string param)
         reply(client, "461", "NICK", "Not enough parameters");
         return;
     }
-    if(nickname_exists(param))
+
+    if (!is_valid_nick(param))
+    {
+        reply(client, "432", "NICK", "Erroneous nickname");
+        return;
+    }
+
+    if(nickname_exists(param) && client->nickname != param)
     {
         reply(client, "433", "NICK", param + " :Nickname is already in use");
         return;
@@ -204,8 +227,7 @@ void Server::handle_command(Client *client, Command command)
             pass_command(client, command.param);
             return;
         }
-
-        reply(client, "464", "", "Password required");
+        reply(client, "464", "PASS", "Password required");
         return;
     }
 
