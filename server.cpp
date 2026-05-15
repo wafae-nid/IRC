@@ -12,7 +12,6 @@ Server::Server()
     max_fd = -1;
     signal(SIGINT,  Server::signal_handler);
     signal(SIGQUIT, Server::signal_handler);
-    FD_ZERO(&original_set);
 
 }
 
@@ -84,7 +83,6 @@ void Server::remove_client(int fd)
             break;
         }
     }
-    FD_CLR(fd, &original_set);
     close(fd);
     recompute_max_fd();
 }
@@ -291,6 +289,34 @@ void Server::check_buffer(Client *client)
 }
 
 /* ---------------- CLIENT HANDLING ---------------- */
+void Server::handle_new_client(void)
+{
+    sockaddr_in addr;
+    socklen_t len = sizeof(addr);
+
+    int client_fd = accept(server_fd, (sockaddr*)&addr, &len);
+    if (client_fd < 0)
+    {
+        std::cout << "accept failed\n";
+        return;
+    }
+
+    pollfd client;
+    client.fd = client_fd;
+    client.events = POLLIN;
+    client.revents = 0;
+
+    fds.push_back(client);
+
+    Client c;
+    c.fd = client_fd;
+    c.pass_ok = false;
+    c.nick_set = false;
+    c.user_set = false;
+    c.registered = false;
+
+    clients.push_back(c);
+}
 
 void Server::handle_client(int client_fd)
 {
@@ -320,6 +346,8 @@ void Server::server_setup()
 {
     struct sockaddr_in addr;
 
+    memset(&addr, 0, sizeof(addr));
+
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1)
     {
@@ -335,8 +363,8 @@ void Server::server_setup()
     }
 
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(6667);
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr.sin_port = htons(6666);
+    addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
@@ -350,8 +378,12 @@ void Server::server_setup()
         return;
     }
 
-    FD_SET(server_fd, &original_set);
-    max_fd = server_fd;
+    pollfd server;
+    server.fd = server_fd;
+    server.events = POLLIN;
+    server.revents = 0;
+
+    fds.push_back(server); // I add server to my vector of fds;
 
     std::cout << "server ready\n";
 }
@@ -360,49 +392,23 @@ void Server::server_setup()
 
 void Server::server_core()
 {
-    fd_set readfds;
 
     while (g_running)
     {
-        readfds = original_set;
-
-        if (select(max_fd + 1, &readfds, NULL, NULL, NULL) < 0)
+    
+        if (poll(fds.data(), fds.size(), -1) < 0)
         {
-            std::cout << "select failed \n";
+            std::cout << "poll failed\n";
             break;
         }
-
-        for (int fd = 0; fd <= max_fd; fd++)
+        for  (size_t i = 0; i < fds.size(); i++)
         {
-            if (!FD_ISSET(fd, &readfds))
+           if (!(fds[i].revents & POLLIN))
                 continue;
-            if (fd == server_fd)
-            {
-                struct sockaddr_in addr;
-                socklen_t len = sizeof(addr);
-
-                int client_fd = accept(fd, (struct sockaddr *)&addr, &len);
-                if (client_fd < 0)
-                {
-                    std::cout<<"accept failed\n";
-                    continue;
-                }
-
-                FD_SET(client_fd, &original_set);
-
-                Client c;
-                c.fd = client_fd;
-                c.pass_ok = false;
-                c.nick_set = false;
-                c.user_set = false;
-                c.registered = false;
-
-                clients.push_back(c);
-
-                recompute_max_fd();
-            }
+            if (fds[i].fd == server_fd)
+                handle_new_client();
             else
-                handle_client(fd);
+                handle_client(fds[i].fd);
         }
     }
 }

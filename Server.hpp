@@ -12,7 +12,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/select.h>
-
+#include <poll.h>  
+#include <cstring>
 
 struct Command
 {
@@ -25,9 +26,10 @@ class Server
     private:
         int server_fd;
         int max_fd;
-        fd_set original_set;
+        std::vector<pollfd> fds;
 
         std::vector<Client> clients;
+
 
         static const std::string SERVER_PASSWORD;
         static const std::string SERVER_NAME; 
@@ -43,6 +45,7 @@ class Server
         void server_core();
 
         void handle_client(int client_fd);
+        void handle_new_client(void);
         void recompute_max_fd();
 
         bool send_to_client(int fd, std::string msg);
@@ -50,7 +53,7 @@ class Server
         void try_register(Client *client);
 
         bool nickname_exists(const std::string &nick);
-        bool Server::is_valid_nick(const std::string &nick);
+        bool is_valid_nick(const std::string &nick);
         void nick_command(Client *client, std::string command);
         void pass_command(Client *client, std::string command);
         void user_command(Client *client, std::string command);
