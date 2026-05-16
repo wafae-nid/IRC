@@ -163,7 +163,6 @@ Command Server::parse_command(std::string command_)
     std::string rest;
     std::string param;
     
-
     size_t index = command_.find_first_not_of(" \t");
 
     if(index == std::string::npos)
@@ -192,11 +191,15 @@ void Server::check_buffer(Client *client)
     std::string command_;
     Command command;
 
-    while ((pos = client->buffer.find("\r\n")) != std::string::npos)
+    while ((pos = client->buffer.find("\n")) != std::string::npos)
     {
         command_ = client->buffer.substr(0, pos);
+        if (!command_.empty() && (command_[command_.size() - 1] =='\r'))
+            command_.erase(command_.size() - 1);
+        //add your command code here\n
         command = parse_command(command_);
+
         handle_command(client, command);
-        client->buffer.erase(0, pos + 2);
+        client->buffer.erase(0, pos + 1);
     }
 }
