@@ -19,6 +19,13 @@ void Server::server_setup()
         std::cout << "setsockopt failed \n";
         return;
     }
+    
+    if (fcntl(server_fd , F_SETFL, O_NONBLOCK) == -1) // so the socket fd becomes non blocking
+    {
+        std::cout << "fcntl failed \n";
+        return;
+    }
+
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(s_port);

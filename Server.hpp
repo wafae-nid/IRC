@@ -16,6 +16,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <fcntl.h>
 
 extern volatile sig_atomic_t g_running;
 struct Command

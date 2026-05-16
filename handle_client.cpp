@@ -46,7 +46,11 @@ void Server::handle_new_client(void)
         std::cout << "accept failed\n";
         return;
     }
-
+    if (fcntl(client_fd , F_SETFL, O_NONBLOCK) == -1) // so the socket fd becomes non blocking
+    {
+        std::cout << "fcntl failed \n";
+        return;
+    }
     pollfd client;
     client.fd = client_fd;
     client.events = POLLIN;
