@@ -14,7 +14,10 @@
 #include <sys/select.h>
 #include <poll.h>  
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 
+extern volatile sig_atomic_t g_running;
 struct Command
 {
     std::string cmd;
@@ -25,17 +28,19 @@ class Server
 {
     private:
         int server_fd;
-        int max_fd;
+        int s_port;
+
         std::vector<pollfd> fds;
 
         std::vector<Client> clients;
 
 
-        static const std::string SERVER_PASSWORD;
-        static const std::string SERVER_NAME; 
+        const std::string SERVER_PASSWORD;
+        const std::string SERVER_NAME;
+        
 
     public:
-        Server();
+        Server(int port,const std::string Password);
         ~Server();
 
         void run();
@@ -46,7 +51,6 @@ class Server
 
         void handle_client(int client_fd);
         void handle_new_client(void);
-        void recompute_max_fd();
 
         bool send_to_client(int fd, std::string msg);
 
@@ -62,7 +66,7 @@ class Server
         void capitalize_command(std::string &command);
         void handle_command(Client *client,Command command);
         void check_buffer(Client *client);
-
+        int parse_port(std::string port);
         void remove_client(int fd);
         static void signal_handler(int sig); // so i dond need an object to call it i sued static
         void reply(Client *client, const std::string &code, const std::string &command, const std::string &message);

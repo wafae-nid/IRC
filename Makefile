@@ -1,14 +1,14 @@
 CC = c++
-CFLAGS = -Wall -Wextra -Werror
+CFLAGS = -Wall -Wextra -Werror -std=c++98
 
 CLIENTSRS = client.cpp
-SERVERSRS = server.cpp
+SERVERSRS = server.cpp server_core.cpp handle_client.cpp handle_commads.cpp
 
 
 HEADERS = server_client.hpp Server.hpp 
 
 NAME_1 = client
-NAME_2 = server
+NAME_2 = ircserv
 
 CLIENTOBJS = $(CLIENTSRS:.cpp=.o)
 SERVEROBJS = $(SERVERSRS:.cpp=.o)
