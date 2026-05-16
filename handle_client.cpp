@@ -1,6 +1,9 @@
 #include "Server.hpp"
 
-
+std::string Server::prefix(Client &c)
+{
+    return ":" + c.nickname + "!" + c.username + "@" + c.hostname;
+}
 
 void Server::reply(Client *client, const std::string &code, const std::string &command, const std::string &message)
 {
@@ -46,11 +49,21 @@ void Server::handle_new_client(void)
         std::cout << "accept failed\n";
         return;
     }
+
     if (fcntl(client_fd , F_SETFL, O_NONBLOCK) == -1) // so the socket fd becomes non blocking
     {
         std::cout << "fcntl failed \n";
+        close(client_fd);
         return;
     }
+    
+    char ip[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip)) == NULL)
+    {
+        close(client_fd);
+        return ;
+    }
+
     pollfd client;
     client.fd = client_fd;
     client.events = POLLIN;
@@ -64,6 +77,7 @@ void Server::handle_new_client(void)
     c.nick_set = false;
     c.user_set = false;
     c.registered = false;
+    c.hostname = ip;
 
     clients.push_back(c);
 }

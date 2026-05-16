@@ -25,6 +25,7 @@ struct Client
 
     std::string nickname;
     std::string username;
+    std::string hostname;
 };
 
 

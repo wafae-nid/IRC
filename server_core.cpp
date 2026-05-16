@@ -23,6 +23,7 @@ void Server::server_setup()
     if (fcntl(server_fd , F_SETFL, O_NONBLOCK) == -1) // so the socket fd becomes non blocking
     {
         std::cout << "fcntl failed \n";
+        close(server_fd);
         return;
     }
 

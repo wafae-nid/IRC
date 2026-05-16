@@ -26,20 +26,32 @@ bool Server::nickname_exists(const std::string &nick)
     }
     return false;
 }
-
+bool Server::is_special_char(char c)
+{
+    return (c == '[' ||c == ']' ||c == '\\' ||c == '`' ||
+            c == '_' ||c == '^' || c == '{' ||c == '|' ||
+            c == '}');
+}
 bool Server::is_valid_nick(const std::string &nick)
 {
     if (nick.empty())
         return false;
 
-    if (nick.size() > 15)
+    if (nick.size() > 9)
+        return false;
+
+    if (!std::isalpha(static_cast<unsigned char>(nick[0])) &&
+        !is_special_char(nick[0]))
         return false;
 
     for (size_t i = 0; i < nick.size(); i++)
     {
-        if (!isalnum(nick[i]) && nick[i] != '_' && nick[i] != '-')
+        if (!std::isalpha(static_cast<unsigned char>(nick[i])) &&
+            !std::isdigit(static_cast<unsigned char>(nick[i])) &&
+            !is_special_char(nick[i]))
             return false;
     }
+
     return true;
 }
 
@@ -48,25 +60,25 @@ void Server::nick_command(Client *client, std::string param)
 
     if (param.empty())
     {
-        reply(client, "461", "NICK", "Not enough parameters");
+        reply(client, "431", "", "No nickname given");
         return;
     }
 
     if (!is_valid_nick(param))
     {
-        reply(client, "432", "NICK", "Erroneous nickname");
+        reply(client, "432", param, "Erroneous nickname");
         return;
     }
 
     if(nickname_exists(param) && client->nickname != param)
     {
-        reply(client, "433", "NICK", param + " :Nickname is already in use");
+        reply(client, "433", param, "Nickname is already in use");
         return;
     }
-    else if(client->registered)
+    if(client->registered)
     {
         std::string old_nick = client->nickname;
-        std::string msg = ":" + old_nick + " NICK :" + param;
+        std::string msg = prefix(*client)+ " NICK :" + param;
         send_to_client(client->fd, msg);
     }
     client->nickname = param;
@@ -76,11 +88,11 @@ void Server::nick_command(Client *client, std::string param)
 
 void Server::pass_command(Client *client, std::string param)
 {
-    if (client->pass_ok)
-    {
-        reply(client, "462", "PASS", "You may not reregister");
-        return;
-    }
+    // if (client->pass_ok)
+    // {
+    //     reply(client, "462", "PASS", "You may not reregister");
+    //     return;
+    // }
 
     if (param.empty())
     {
@@ -138,14 +150,17 @@ void Server::handle_command(Client *client, Command command)
             pass_command(client, command.param);
             return;
         }
-        reply(client, "464", "PASS", "Password required");
+        reply(client, "451", "*", "You have not registered");
         return;
     }
-
     if (command.cmd == "PASS")
     {
-        reply(client, "462", "PASS", "You may not reregister");
+        if(client->registered)
+            reply(client, "462", "PASS", "You may not reregister");
+        else
+           pass_command(client, command.param); 
     }
+
     else if (command.cmd == "NICK")
         nick_command(client, command.param);
     else if (command.cmd == "USER")
