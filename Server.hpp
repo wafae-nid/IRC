@@ -24,7 +24,12 @@ extern volatile sig_atomic_t g_running;
 struct Command
 {
     std::string cmd;
-    std::string param;
+    std::vector<std::string> params;
+};
+struct tmp_cmd
+{
+    std::string cmd;
+    std::string arg;
 };
 
 class Server
@@ -61,11 +66,14 @@ class Server
         bool is_special_char(char c);
         bool nickname_exists(const std::string &nick);
         bool is_valid_nick(const std::string &nick);
-        void nick_command(Client *client, std::string command);
-        void pass_command(Client *client, std::string command);
-        void user_command(Client *client, std::string command);
-
+        void nick_command(Client *client, Command command);
+        void pass_command(Client *client, Command command);
+        // void user_command(Client *client, std::string command);
+        void user_command(Client *client, Command command);
         std::string prefix(Client &c);
+        Command dispatch_pass_nick(tmp_cmd tmp);
+        Command dispatch_user(tmp_cmd tmp);
+        tmp_cmd command_name(std::string command_);
         Command parse_command(std::string command_);
         void capitalize_command(std::string &command);
         void handle_command(Client *client,Command command);

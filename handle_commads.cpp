@@ -55,38 +55,38 @@ bool Server::is_valid_nick(const std::string &nick)
     return true;
 }
 
-void Server::nick_command(Client *client, std::string param)
+void Server::nick_command(Client *client, Command command)
 {
 
-    if (param.empty())
+    if (command.params.size() != 1)
     {
         reply(client, "431", "", "No nickname given");
         return;
     }
 
-    if (!is_valid_nick(param))
+    if (!is_valid_nick(command.params[0]))
     {
-        reply(client, "432", param, "Erroneous nickname");
+        reply(client, "432", command.params[0], "Erroneous nickname");
         return;
     }
 
-    if(nickname_exists(param) && client->nickname != param)
+    if(nickname_exists(command.params[0]) && client->nickname != command.params[0])
     {
-        reply(client, "433", param, "Nickname is already in use");
+        reply(client, "433", command.params[0], "Nickname is already in use");
         return;
     }
-    if(client->registered)
+    if(client->registered && client->nickname != command.params[0])
     {
         std::string old_nick = client->nickname;
-        std::string msg = prefix(*client)+ " NICK :" + param;
+        std::string msg = prefix(*client)+ " NICK :" + command.params[0];
         send_to_client(client->fd, msg);
     }
-    client->nickname = param;
+    client->nickname = command.params[0];
     client->nick_set = true;
     try_register(client);
 }
 
-void Server::pass_command(Client *client, std::string param)
+void Server::pass_command(Client *client, Command command)
 {
     // if (client->pass_ok)
     // {
@@ -94,13 +94,13 @@ void Server::pass_command(Client *client, std::string param)
     //     return;
     // }
 
-    if (param.empty())
+    if (command.params.size() != 1)
     {
         reply(client, "461", "PASS", "Not enough parameters");
         return;
     }
 
-    if (param != SERVER_PASSWORD)
+    if (command.params[0] != SERVER_PASSWORD)
     {
         reply(client, "464", "PASS", "Wrong password");
         return;
@@ -108,7 +108,7 @@ void Server::pass_command(Client *client, std::string param)
     client->pass_ok = true;
 }
 
-void Server::user_command(Client *client, std::string param)
+void Server::user_command(Client *client, Command command)
 {
     if (client->user_set)
     {
@@ -116,14 +116,17 @@ void Server::user_command(Client *client, std::string param)
         return;
     }
 
-    if (param.empty())
+    if (command.params.size() != 4)
     {
         reply(client, "461", "USER", "Not enough parameters");
         return;
     }
-    client->username = param;
+    client->username = command.params[0];
+    client->realname = command.params[3];
+    std::cout << client->realname << "\n";
     client->user_set = true;
     try_register(client);
+
 }
 
 /* ---------------- COMMAND HANDLER ---------------- */
@@ -141,13 +144,12 @@ void Server::handle_command(Client *client, Command command)
     if (command.cmd.empty())
         return;
 
-    capitalize_command(command.cmd);// so nick and NICK WORK ;
-
+    std::cout<< command.cmd <<"\n";
     if (!client->pass_ok)
     {
         if (command.cmd == "PASS")
         {
-            pass_command(client, command.param);
+            pass_command(client, command);
             return;
         }
         reply(client, "451", "*", "You have not registered");
@@ -158,46 +160,124 @@ void Server::handle_command(Client *client, Command command)
         if(client->registered)
             reply(client, "462", "PASS", "You may not reregister");
         else
-           pass_command(client, command.param); 
+           pass_command(client, command); 
     }
 
     else if (command.cmd == "NICK")
-        nick_command(client, command.param);
+        nick_command(client, command);
     else if (command.cmd == "USER")
-        user_command(client, command.param);
+        user_command(client, command);
     else
         reply(client, "421", command.cmd, "Unknown command");
 }
 
 
 /* ---------------- BUFFER ---------------- */
-
-Command Server::parse_command(std::string command_)
+Command Server::dispatch_user(tmp_cmd tmp)
 {
     Command command;
-    std::string rest;
+    size_t pos;
     std::string param;
+
+    std::string before_colon;
+    std::string after_colon;
+
+
+
+    command.cmd = tmp.cmd;
+    size_t colon_index = tmp.arg.find(":");
+
+    if(colon_index != std::string::npos)
+    {
+        before_colon = tmp.arg.substr(0, colon_index);
+        after_colon = tmp.arg.substr(colon_index + 1); 
+    }
+    else
+       before_colon = tmp.arg;
+
+    while ((pos = before_colon.find_first_not_of(" \t")) != std::string::npos)
+    {
+        before_colon = before_colon.substr(pos);
+
+        size_t space = before_colon.find(' ');
+
+        if (space == std::string::npos)
+        {
+            command.params.push_back(before_colon);
+            break;
+        }
+        command.params.push_back(before_colon.substr(0, space));
+        before_colon = before_colon.substr(space + 1);
+    }
+    if(!after_colon.empty())
+        command.params.push_back(after_colon);
+
+    return(command);
+}
+
+Command Server::dispatch_pass_nick(tmp_cmd tmp)
+{
+
+    Command command;
+
+    std::string rest;
+
+    command.cmd = tmp.cmd;
+
+    size_t space = tmp.arg.find_first_not_of(" \t");
+
+    
+    if (space == std::string::npos)
+        command.params.push_back(tmp.arg);
+    else
+    {  
+        
+        rest  = tmp.arg.substr(space);
+        size_t index = rest.find(' ');
+        command.params.push_back(rest.substr(0, index));
+
+    }
+    return command;
+
+}
+tmp_cmd Server::command_name(std::string command_)
+{
+    tmp_cmd tmp;
+
+    std::string rest;
     
     size_t index = command_.find_first_not_of(" \t");
 
     if(index == std::string::npos)
-        return(command);
+        return(tmp);
 
     rest = command_.substr(index); // the first not space char pos
 
     size_t space_pos = rest.find(' ');
     if(space_pos == std::string::npos)
     {
-        command.cmd = rest;
-        return(command);
+        tmp.cmd = rest;
+        return(tmp);
     }
-    command.cmd = rest.substr(0, space_pos);
+    tmp.cmd = rest.substr(0, space_pos);
+    tmp.arg = rest.substr(space_pos + 1) ;
+    return(tmp);
+}
 
-    index = rest.find_first_not_of(" \t", space_pos);// fisrt non space char from that last space 
-    if(index != std::string::npos) // if there is a parameter assign it 
-        command.param = rest.substr(index);
+Command Server::parse_command(std::string command_)
+{
+    tmp_cmd tmp;
+    Command command;
+
+    tmp = command_name(command_);
+    capitalize_command(tmp.cmd);
+
+    if(tmp.cmd == "PASS" || tmp.cmd == "NICK")
+        command = dispatch_pass_nick(tmp);
+    else if(tmp.cmd == "USER")
+        command = dispatch_user(tmp);
+
     return(command);
-
 }
 
 void Server::check_buffer(Client *client)
