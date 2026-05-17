@@ -58,7 +58,7 @@ bool Server::is_valid_nick(const std::string &nick)
 void Server::nick_command(Client *client, Command command)
 {
 
-    if (command.params.size() != 1)
+    if (command.params.size() <1)
     {
         reply(client, "431", "", "No nickname given");
         return;
@@ -94,7 +94,7 @@ void Server::pass_command(Client *client, Command command)
     //     return;
     // }
 
-    if (command.params.size() != 1)
+    if (command.params.size() < 1)
     {
         reply(client, "461", "PASS", "Not enough parameters");
         return;
@@ -116,13 +116,13 @@ void Server::user_command(Client *client, Command command)
         return;
     }
 
-    if (command.params.size() != 4)
+    if (command.params.size() < 4)
     {
         reply(client, "461", "USER", "Not enough parameters");
         return;
     }
     client->username = command.params[0];
-    client->realname = command.params[3];
+    client->realname = command.params.back();
     std::cout << client->realname << "\n";
     client->user_set = true;
     try_register(client);
@@ -144,7 +144,6 @@ void Server::handle_command(Client *client, Command command)
     if (command.cmd.empty())
         return;
 
-    std::cout<< command.cmd <<"\n";
     if (!client->pass_ok)
     {
         if (command.cmd == "PASS")
@@ -217,29 +216,32 @@ Command Server::dispatch_user(tmp_cmd tmp)
 
 Command Server::dispatch_pass_nick(tmp_cmd tmp)
 {
-
     Command command;
-
     std::string rest;
+    size_t pos;
 
     command.cmd = tmp.cmd;
+    rest = tmp.arg;
 
-    size_t space = tmp.arg.find_first_not_of(" \t");
+    while ((pos = rest.find_first_not_of(" \t")) != std::string::npos)
+    {
+        rest = rest.substr(pos);
 
-    
-    if (space == std::string::npos)
-        command.params.push_back(tmp.arg);
-    else
-    {  
-        
-        rest  = tmp.arg.substr(space);
-        size_t index = rest.find(' ');
-        command.params.push_back(rest.substr(0, index));
+        size_t space = rest.find(' ');
 
+        if (space == std::string::npos)
+        {
+            command.params.push_back(rest);
+            break;
+        }
+
+        command.params.push_back(rest.substr(0, space));
+        rest = rest.substr(space + 1);
     }
-    return command;
 
+    return (command);
 }
+
 tmp_cmd Server::command_name(std::string command_)
 {
     tmp_cmd tmp;
