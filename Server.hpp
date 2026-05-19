@@ -54,7 +54,7 @@ class Server
         void run();
 
     private:
-        void server_setup();
+        bool server_setup();
         void server_core();
 
         void handle_client(int client_fd);

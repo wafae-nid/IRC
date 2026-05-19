@@ -20,8 +20,8 @@ Server::Server(int port,const std::string Password):SERVER_PASSWORD(Password), S
 
 Server::~Server()
 {
-    if (server_fd != -1)
-        close(server_fd);
+    for (size_t i = 0; i < fds.size(); i++)
+        close(fds[i].fd);
 }
 
 void Server::signal_handler(int sig)
