@@ -3,15 +3,11 @@
 
 volatile sig_atomic_t   g_running = 1;
 
-Server::Server(int port,const std::string Password):SERVER_PASSWORD(Password), SERVER_NAME("IRC")
+Server::Server(int port,const std::string Password):s_port(port), SERVER_PASSWORD(Password), SERVER_NAME("IRC")
 {
    
     server_fd = -1;
-    if (port <= 0 || port > 65535)
-    {
-        std::cout << "Invalid port range\n";
-        return;
-    }
+   
     s_port = port; 
     signal(SIGINT,  Server::signal_handler);
     signal(SIGQUIT, Server::signal_handler);
@@ -56,6 +52,11 @@ int main(int argc, char **argv)
    if(!parse_port(argv[1]))
     return(1);
    int port = std::atoi(argv[1]);
+    if (port <1024 || port > 65535)
+    {
+        std::cout << "Invalid port range\n";
+        return(1);
+    }
    Server server(port,argv[2]);
    server.run(); 
 
