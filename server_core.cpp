@@ -1,6 +1,6 @@
 #include "Server.hpp"
 
-bool Server::server_setup()
+void Server::server_setup()
 {
     struct sockaddr_in addr;
 
@@ -10,21 +10,22 @@ bool Server::server_setup()
     if (server_fd == -1)
     {
         std::cout << "socket failed \n";
-        return(false);
+        return;
     }
 
     int opt = 1;
     if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
     {
         std::cout << "setsockopt failed \n";
-        return(false);
+        close(server_fd);
+        return;
     }
     
     if (fcntl(server_fd , F_SETFL, O_NONBLOCK) == -1) // so the socket fd becomes non blocking
     {
         std::cout << "fcntl failed \n";
         close(server_fd);
-        return(false);
+        return;
     }
 
 
@@ -35,13 +36,15 @@ bool Server::server_setup()
     if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
     {
         std::cout << "binding failed \n";
-        return(false);
+        close(server_fd);
+        return;
     }
 
     if (listen(server_fd, 10) == -1)
     {
         std::cout << "listening failed \n";
-        return(false);
+        close(server_fd);
+        return;
     }
 
     pollfd server;
@@ -52,7 +55,7 @@ bool Server::server_setup()
     fds.push_back(server); // I add server to my vector of fds;
 
     std::cout << "server ready\n";
-    return(true);
+    return;
 }
 
 /* ---------------- MAIN LOOP ---------------- */
@@ -91,7 +94,6 @@ void Server::server_core()
 /* ---------------- RUN ---------------- */
 void Server::run()
 {
-    if(!server_setup())
-        return;
+    server_setup();
     server_core();
 }
