@@ -485,6 +485,7 @@ If they cannot complete immediately, they should return EAGAIN so the server can
     The server simply skips this client for now and continues serving every other client.
 
     Later, when poll() reports that the socket is writable again, the server retries the send.
+    
 
 ## 3. accept()
 
