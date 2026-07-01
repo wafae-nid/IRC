@@ -21,7 +21,17 @@
 
 # What is IRC?
 
-**Internet Relay Chat (IRC)** is one of the oldest Internet protocols for real-time text communication.
+**Internet Relay Chat (IRC)** is one of the oldest Internet **protocols** for real-time text communication.
+
+HTTP → used for websites
+SMTP → used for email
+FTP → used for file transfer
+IRC → used for live text chatting
+
+
+IRC = the protocol (the rules computers follow).
+RFC 1459 / RFC 2812 = documents that describe those rules.
+
 
 It allows many users to communicate through:
 
@@ -408,8 +418,26 @@ Example:
 ```
 $ nc localhost 6667
 ```
+What is Netcat (nc)?
 
-Everything you type is sent directly over TCP.
+Netcat (nc) is a simple networking tool that can create TCP or UDP connections and send or receive raw data.
+
+For the ft_irc project, it is commonly used as a basic TCP client to test an IRC server.
+
+When you run:
+
+nc localhost 6667
+
+Netcat:
+
+Creates a TCP socket.
+Connects that socket to the server using TCP.
+Sends exactly the bytes you type through the TCP connection.
+Receives whatever bytes the server sends back and displays them on your terminal.
+
+Netcat does not understand the IRC protocol. It does not parse IRC commands or implement IRC behavior. It simply provides a TCP connection and transports raw bytes between you and the server.
+
+This makes Netcat an excellent tool for testing because it lets you communicate directly with your IRC server without any protocol-specific processing.Everything you type is sent directly over TCP.
 
 Example:
 

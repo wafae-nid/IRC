@@ -51,6 +51,15 @@ Sockets can also be used for communication between processes running on the **sa
 
 In this case, no network hardware or TCP/IP protocol is involved. The kernel transfers the data directly between the two sockets.
 
+
+
+Call                                                Address Family    Socket Type    Protocol Used
+socket(AF_INET, SOCK_STREAM, 0)    IPv4                   Stream    TCP
+socket(AF_INET6, SOCK_STREAM, 0)    IPv6                  Stream    TCP
+socket(AF_INET, SOCK_DGRAM, 0)       IPv4                   Datagram    UDP
+socket(AF_UNIX, SOCK_STREAM, 0)   Unix domain          Stream    Unix domain stream protocol (not TCP)
+socket(AF_UNIX, SOCK_DGRAM, 0)    Unix domain        Datagram    Unix domain datagram protocol (not UDP)
+
 ```text
 Process A
     │
